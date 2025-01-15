@@ -1,6 +1,5 @@
 import pandas as pd 
 import xarray as xr
-import datetime as dt 
 import numpy as np
 
 def compute_indicator_netcdf(climate_data, NameIndicator, varName, threshold=None, two_years_culture=True, start_stage=None, end_stage=None):
@@ -10,30 +9,20 @@ def compute_indicator_netcdf(climate_data, NameIndicator, varName, threshold=Non
     classDayInf = ["cdaystmin", "defraidays"]
     classFreqSup = ["raifreq", "excraifreq", "hsfreq"]
     classFreqInf = ["cfreqtmean", "cfreqtmin"]
-   
-    import xarray as xr
-    import pandas as pd
-    import numpy as np
-    
+
     # Get time information
     time = climate_data.time
-    
-    # Vérifier si le dataset n'est pas vide
-    if len(time) == 0:
-        return xr.Dataset()
-        
+
     doy = pd.DatetimeIndex(time.values).dayofyear
-    
-    # Create start and end arrays
+
+    years = pd.DatetimeIndex(time.values).year.unique()
+       # Create start and end arrays
     if isinstance(start_stage, (int, float)):
         rast_start = xr.full_like(climate_data[varName].isel(time=0), start_stage)
     
     if isinstance(end_stage, (int, float)):
         rast_end = xr.full_like(climate_data[varName].isel(time=0), end_stage)
-    
-    # Get unique years
-    years = pd.DatetimeIndex(time.values).year.unique()
-    
+
     # Process each year
     results = []
     for year in years:
@@ -46,6 +35,8 @@ def compute_indicator_netcdf(climate_data, NameIndicator, varName, threshold=Non
             
             if len(rast_year.time) < 367:
                 result = xr.full_like(climate_data[varName].isel(time=0), np.nan)
+                result = result.drop("time")
+                result = result.assign_coords(year=year)
                 results.append(result)
                 continue
                 
@@ -54,15 +45,17 @@ def compute_indicator_netcdf(climate_data, NameIndicator, varName, threshold=Non
             rast_year = climate_data.sel(time=time.dt.year==year)
             if len(rast_year.time) < 367:
                 result = xr.full_like(climate_data[varName].isel(time=0), np.nan)
+                result = result.drop("time")
                 results.append(result)
                 continue
-                
-        if isinstance(start_stage, xr.DataArray):
-            rast_start = start_stage.sel(time=time.dt.year==year)
-            
-        if isinstance(end_stage, xr.DataArray):
-            rast_end = end_stage.sel(time=time.dt.year==year)
-            
+        
+        if isinstance(start_stage, xr.Dataset):
+            rast_start = start_stage.sel(time=year)
+            rast_start = rast_start.stage
+        if isinstance(end_stage, xr.Dataset):
+            rast_end = end_stage.sel(time=year)
+            rast_end = rast_end.stage
+        
         # Apply calculation
         if NameIndicator in classMoy:
             result = xr.apply_ufunc(
@@ -72,6 +65,7 @@ def compute_indicator_netcdf(climate_data, NameIndicator, varName, threshold=Non
                 rast_end,
                 input_core_dims=[['time'], [], []],
                 vectorize=True)
+            result = result.assign_coords(year=year)
 
         elif NameIndicator in classDaySup:
             result = xr.apply_ufunc(
@@ -81,7 +75,7 @@ def compute_indicator_netcdf(climate_data, NameIndicator, varName, threshold=Non
                 rast_end,
                 input_core_dims=[['time'], [], []],
                 vectorize=True)
-                
+            
         elif NameIndicator in classSum:
             result = xr.apply_ufunc(
                 lambda x, start, end: np.sum(x[(np.arange(len(x)) >= start-1) & (np.arange(len(x)) <= end-1)]),
@@ -90,7 +84,7 @@ def compute_indicator_netcdf(climate_data, NameIndicator, varName, threshold=Non
                 rast_end,
                 input_core_dims=[['time'], [], []],
                 vectorize=True)
-                
+            
         elif NameIndicator in classDayInf:
             result = xr.apply_ufunc(
                 lambda x, start, end: np.sum(x[(np.arange(len(x)) >= start-1) & (np.arange(len(x)) <= end-1)] < threshold),
@@ -99,7 +93,7 @@ def compute_indicator_netcdf(climate_data, NameIndicator, varName, threshold=Non
                 rast_end,
                 input_core_dims=[['time'], [], []],
                 vectorize=True)
-       
+            
         elif NameIndicator in classFreqSup:
             result = xr.apply_ufunc(
                 lambda x, start, end: (np.sum(x[(np.arange(len(x)) >= start-1) & (np.arange(len(x)) <= end-1)] > threshold) * 100) / np.sum((np.arange(len(x)) >= start-1) & (np.arange(len(x)) <= end-1)),
@@ -108,16 +102,14 @@ def compute_indicator_netcdf(climate_data, NameIndicator, varName, threshold=Non
                 rast_end,
                 input_core_dims=[['time'], [], []],
                 vectorize=True)
-            #result = result.assign_coords(year=year)    
-        #result = result.assign_coords(year=year)
+        
         results.append(result)
 
-     
-        
-    # Combine results
-    if results:
-        output = xr.concat(results, dim="year").to_dataset()
-        output = output.rename({varName: NameIndicator})
-        return output
-    else:
-        return xr.Dataset()
+         
+        # Combine results
+        if results:
+            output = xr.concat(results, dim="year").to_dataset()
+            output = output.rename({varName: NameIndicator})
+            return output
+        else:
+            return xr.Dataset()

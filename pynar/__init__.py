@@ -1,1 +1,1 @@
-from .pynar import compute_indicator_netcdf
+from .computeIndicator import compute_indicator_netcdf

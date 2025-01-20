@@ -7,7 +7,7 @@ Ce package permet de calculer des indicateurs climatiques à partir de données 
 Pour installer le package, vous pouvez cloner le dépôt et utiliser `pip` :
 
 ```sh
-git clone https://forgemia.inra.fr/agroclim/Indicators/OutilsPourIndicateurs/fonctionspython/pynar.git
+pip3 install  git+https://git@forgemia.inra.fr/agroclim/Indicators/OutilsPourIndicateurs/fonctionspython/pynar.git
 ```
 
 

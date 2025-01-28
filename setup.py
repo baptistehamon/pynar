@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='pynar',  # Nom du package
-    version='0.3',  # Version actuelle du package
+    version='0.5',  # Version actuelle du package
     packages=find_packages(),  # Trouve automatiquement tous les packages et sous-packages
     install_requires=[  # Liste des dépendances nécessaires
         'pandas',  # Bibliothèque pour la manipulation de données

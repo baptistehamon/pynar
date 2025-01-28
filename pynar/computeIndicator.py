@@ -2,7 +2,7 @@ import pandas as pd
 import xarray as xr
 import numpy as np
 
-def compute_indicator_netcdf(climate_data, NameIndicator, varName, threshold=None, two_years_culture=True, start_stage=None, end_stage=None):
+def compute_indicator_netcdf(climate_data, NameIndicator,Name_output, varName, threshold=None, two_years_culture=True, start_stage=None, end_stage=None):
     classMoy = ["mint", "maxt", "meant", "avsorad"]
     classDaySup = ["hdaystmax", "hdaystmin", "hdaystmean", "excraidays"]
     classSum = ["rainsum", "sumetp"]
@@ -105,10 +105,10 @@ def compute_indicator_netcdf(climate_data, NameIndicator, varName, threshold=Non
         # Combine results
         if results:
             if len(years) == 1:
-                output = xr.concat(results, dim="year").to_dataset(name=NameIndicator)
+                output = xr.concat(results, dim="year").to_dataset(name=Name_output)
             else:
                 output = xr.concat(results, dim="year").to_dataset()
-                output = output.rename({varName: NameIndicator})
+                output = output.rename({varName: Name_output})
             return output
         else:
             return xr.Dataset()

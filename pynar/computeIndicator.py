@@ -104,12 +104,12 @@ def compute_indicator_netcdf(climate_data, NameIndicator,Name_output, varName, t
 
          
         # Combine results
-        if results:
-            if len(years) == 1:
-                output = xr.concat(results, dim="year").to_dataset(name=Name_output)
-            else:
-                output = xr.concat(results, dim="year").to_dataset(name=Name_output)
-                #output = output.rename({varName: Name_output})
-            return output
+    if results:
+        if len(years) == 1:
+            output = xr.concat(results, dim="year").to_dataset(name=Name_output)
         else:
-            return xr.Dataset()
+            output = xr.concat(results, dim="year").to_dataset(name=Name_output)
+                #output = output.rename({varName: Name_output})
+        return output
+    else:
+        return xr.Dataset()

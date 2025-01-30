@@ -2,7 +2,7 @@ import pandas as pd
 import xarray as xr
 import numpy as np
 
-def compute_indicator_netcdf(climate_data, NameIndicator,Name_output, varName, threshold=None, two_years_culture=True, start_stage=None, end_stage=None):
+def compute_indicator_netcdf(climate_data, NameIndicator,Name_output, varName, threshold=None, two_years_culture=True, start_stage=None, end_stage=None,PrintYear=False):
     classMoy = ["mint", "maxt", "meant", "avsorad"]
     classDaySup = ["hdaystmax", "hdaystmin", "hdaystmean", "excraidays"]
     classSum = ["rainsum", "sumetp"]

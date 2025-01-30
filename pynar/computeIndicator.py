@@ -26,7 +26,8 @@ def compute_indicator_netcdf(climate_data, NameIndicator,Name_output, varName, t
     # Process each year
     results = []
     for year in years:
-        print(year)
+        if PrintYear:
+            print(year)
         
         if two_years_culture:
             # Select current and previous year

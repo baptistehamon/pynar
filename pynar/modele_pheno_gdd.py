@@ -73,13 +73,12 @@ def RFVI_cal(JVCMINI, jvc, JVI):
 
 
 def compute_indice_BBCH(TmoyYear,GDD_BBCH,rfvi,rfpi,TDMIN,TDMAX,TCXSTOP):
-    
-     
     udevecult = udevult_comput(TmoyYear["tasAdjust"],TDMIN,TDMAX,TCXSTOP)
     UPVT_cell = udevecult * rfvi * rfpi
     UPVTCumul = UPVT_cell.cumsum(dim="time")
     stade = (UPVTCumul > GDD_BBCH).argmax(dim="time")
     stade = stade.where((UPVTCumul > GDD_BBCH).any(dim="time"))
+    return stade
 
 def selection_stage(Tmoy,start_stage,end_stage,latitude,longitude):
     data_compute = xr.apply_ufunc(
@@ -148,9 +147,9 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
             )
         else :
             rfpi =xr.full_like(rast_year,1)
-    
+            rfpi = rfpi[varName]
         if vernalisation:
-            jvi_calc = JVI(rast_year["tasAdjust"], TFROID, AMPFROID)
+            jvi_calc = JVI(rast_year[varName], TFROID, AMPFROID)
             JVCMINI_da = xr.full_like(jvi_calc, JVCMINI)  
             jvc_da = xr.full_like(jvi_calc, jvc)
             rfvi = xr.apply_ufunc(
@@ -164,18 +163,19 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
             )
         else : 
             rfvi =xr.full_like(rast_year,1)
+            rfvi = rfvi[varName]
     # Appliquer la sélection et le calcul d'indice
         data_compute = selection_stage(rast_year, start_stage, end_stage,latitude=latitude,longitude=longitude)
-    
+       
         result = compute_indice_BBCH(data_compute, GDD_BBCH=GDD,rfpi=rfpi, rfvi=rfvi,TDMIN=TDMIN,TDMAX=TDMAX,TCXSTOP=TCXSTOP)
-
+        result =  result.assign_coords(year=year)
     # Ajouter le résultat
         results.append(result)
-
+    #return(results)
 # Concaténation des résultats par année
-    if isinstance(results, xr.DataArray):
-        pheno_date = xr.concat(results, dim="year").to_dataset(name="stage")
-    if isinstance(results,xr.Dataset):
-        pheno_date = xr.concat(results, dim="year")
-        pheno_date = pheno_date.rename_vars(tasAdjust="stage")  
+    #if isinstance(results, xr.DataArray):
+    pheno_date = xr.concat(results, dim="year").to_dataset(name="stage")
+    #if isinstance(results,xr.Dataset):
+    #    pheno_date = xr.concat(results, dim="year")
+    #    pheno_date = pheno_date.rename_vars(tasAdjust="stage")  
     return(pheno_date)

@@ -1,12 +1,11 @@
-import pandas as pd
+import pandas as pd 
 import xarray as xr
 import numpy as np
+
 
 def load_parameters (TCXSTOP=None,TDMIN=None,TDMAX=None,SENSIPHOT=None,PHOBASE=None,PHOSTAT=None,TFROID=None,AMPFROID=None,JVCMINI=None ,jvc=None):
        return TCXSTOP ,TDMIN,TDMAX,SENSIPHOT,PHOBASE,PHOSTAT,TFROID,AMPFROID,JVCMINI,jvc
     
-
-
 def upvt (udevecult,RFPI,RFVI):
     UPVT = udevecult*RFPI*RFVI
     return(UPVT)
@@ -72,56 +71,17 @@ def RFVI_cal(JVCMINI, jvc, JVI):
     rfvi = np.clip(rfvi, 0, 1)  # Équivalent à np.where()
     return rfvi
 
-def compute_indice_BBCH(TmoyYear,GDD_BBCH,params,latitude="y",longitude="x",vernalisation=True,photoperiode=True):
+
+def compute_indice_BBCH(TmoyYear,GDD_BBCH,rfvi,rfpi,TDMIN,TDMAX,TCXSTOP):
     
-    TCXSTOP, TDMIN, TDMAX, SENSIPHOT, PHOBASE, PHOSTAT, TFROID, AMPFROID, JVCMINI, jvc = params
-    jours_annee = TmoyYear["time"].dt.dayofyear 
-    """Fonction appliquée sur chaque cellule"""
-    if (photoperiode==True):
-        photoP = xr.apply_ufunc(
-            photoperiode_calc,
-            TmoyYear[latitude],                # Raster de latitude (2D: y, x)
-            jours_annee,   # On applique aux temps de la cellule
-            vectorize=True
-        )
-        photoP = photoP.transpose("time", latitude)
-        photoP = photoP.expand_dims(x=TmoyYear[longitude], axis=-1)
-        rfpi = xr.apply_ufunc(
-        RFPI_cal,
-        photoP,
-        SENSIPHOT, PHOBASE, PHOSTAT,
-    )
-    else :
-        rfpi =xr.full_like(TmoyYear,1)
-    
-    if (vernalisation == True):
-        jvi_calc = JVI(TmoyYear["tasAdjust"], TFROID, AMPFROID)
-        JVCMINI_da = xr.full_like(jvi_calc, JVCMINI)  
-        jvc_da = xr.full_like(jvi_calc, jvc)
-        rfvi = xr.apply_ufunc(
-        RFVI_cal,
-        JVCMINI_da,  
-        jvc_da,      
-        jvi_calc,  
-        input_core_dims=[["time", latitude, longitude], ["time", latitude, longitude], ["time", latitude, longitude]],
-        output_core_dims=[["time", latitude, longitude]],
-        vectorize=True
-    )
-    else : 
-        rfvi =xr.full_like(TmoyYear,1)
-
-
-
-   
+     
     udevecult = udevult_comput(TmoyYear["tasAdjust"],TDMIN,TDMAX,TCXSTOP)
     UPVT_cell = udevecult * rfvi * rfpi
     UPVTCumul = UPVT_cell.cumsum(dim="time")
     stade = (UPVTCumul > GDD_BBCH).argmax(dim="time")
     stade = stade.where((UPVTCumul > GDD_BBCH).any(dim="time"))
 
-    return stade
-
-def selection_stage(Tmoy,start_stage,end_stage):
+def selection_stage(Tmoy,start_stage,end_stage,latitude,longitude):
     data_compute = xr.apply_ufunc(
         lambda x, start, end: np.where(
         (np.arange(len(x)) < start) | (np.arange(len(x)) > end), 0, x
@@ -135,31 +95,25 @@ def selection_stage(Tmoy,start_stage,end_stage):
         dask="parallelized",  # Utiliser Dask si nécessaire pour des données volumineuses
         output_dtypes=[np.float32]  # Le type de la sortie (par exemple, float32)
     )
-    data_compute = data_compute.transpose("time", "y","x")
+    data_compute = data_compute.transpose("time",latitude,longitude)
     data_compute = data_compute.where(~np.isnan(start_stage.stage))  
     return(data_compute)
 
-
-    
-    return result.assign_coords(year=year).expand_dims("year")
-
-
-
 def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,vernalisation,photoperiode,params,varName):
-    
     TCXSTOP, TDMIN, TDMAX, SENSIPHOT, PHOBASE, PHOSTAT, TFROID, AMPFROID, JVCMINI, jvc = params
     time = tmean.time
 
     years = pd.DatetimeIndex(time.values).year.unique()
     results = []
     for year in years:
-        # Vérifier si on prend une ou deux années
+        print(year)
+    # Vérifier si on prend une ou deux années
         if two_years_culture:
-            # Sélectionner l'année actuelle et l'année précédente
+        # Sélectionner l'année actuelle et l'année précédente
             mask = ((tmean.time.dt.year == year) | (tmean.time.dt.year == year - 1))
             rast_year = tmean.sel(time=mask)
         
-            # Vérification du nombre de jours
+        # Vérification du nombre de jours
             if rast_year.sizes["time"] < 367:  # Vérifie la dimension time
                 result = xr.full_like(tmean[varName].isel(time=0), np.nan)
                 result = result.drop_vars("time")  # Supprimer la dimension temps
@@ -168,24 +122,60 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
                 continue
                 
         else:
-            # Sélectionner uniquement l'année actuelle
+        # Sélectionner uniquement l'année actuelle
             rast_year = tmean.sel(time=tmean.time.dt.year == year)
 
-        # Sélection des périodes de stade de croissance
+    # Sélection des périodes de stade de croissance
         start_stage = stade.sel(year=year)
         end_stage = xr.full_like(start_stage, 730)
+    
+        jours_annee = rast_year["time"].dt.dayofyear 
+    #"""Fonction appliquée sur chaque cellule"""
+        if photoperiode:
+            photoP = xr.apply_ufunc(
+                photoperiode_calc,
+                rast_year[latitude],                # Raster de latitude (2D: y, x)
+                jours_annee,   # On applique aux temps de la cellule
+                vectorize=True
+            )
+            photoP = photoP.transpose("time", latitude)
+            photoP = photoP.expand_dims(x=rast_year[longitude].values, axis=-1)
+        
+            rfpi = xr.apply_ufunc(
+                RFPI_cal,
+                photoP,
+                SENSIPHOT, PHOBASE, PHOSTAT,
+            )
+        else :
+            rfpi =xr.full_like(rast_year,1)
+    
+        if vernalisation:
+            jvi_calc = JVI(rast_year["tasAdjust"], TFROID, AMPFROID)
+            JVCMINI_da = xr.full_like(jvi_calc, JVCMINI)  
+            jvc_da = xr.full_like(jvi_calc, jvc)
+            rfvi = xr.apply_ufunc(
+                RFVI_cal,
+                JVCMINI_da,  
+                jvc_da,      
+                jvi_calc,  
+                input_core_dims=[["time", latitude, longitude], ["time", latitude, longitude], ["time", latitude, longitude]],
+                output_core_dims=[["time", latitude, longitude]],
+                vectorize=True
+            )
+        else : 
+            rfvi =xr.full_like(rast_year,1)
+    # Appliquer la sélection et le calcul d'indice
+        data_compute = selection_stage(rast_year, start_stage, end_stage,latitude=latitude,longitude=longitude)
+    
+        result = compute_indice_BBCH(data_compute, GDD_BBCH=GDD,rfpi=rfpi, rfvi=rfvi,TDMIN=TDMIN,TDMAX=TDMAX,TCXSTOP=TCXSTOP)
 
-        # Appliquer la sélection et le calcul d'indice
-        data_compute = selection_stage(rast_year, start_stage, end_stage)
-        result = compute_indice_BBCH(data_compute, GDD_BBCH=GDD, latitude=latitude, longitude=longitude, vernalisation=vernalisation, photoperiode=photoperiode,params=params)
-
-        # Ajouter le résultat
+    # Ajouter le résultat
         results.append(result)
 
-    # Concaténation des résultats par année
-    if isinstance(result, xr.DataArray):
+# Concaténation des résultats par année
+    if isinstance(results, xr.DataArray):
         pheno_date = xr.concat(results, dim="year").to_dataset(name="stage")
-    if isinstance(result,xr.Dataset):
+    if isinstance(results,xr.Dataset):
         pheno_date = xr.concat(results, dim="year")
         pheno_date = pheno_date.rename_vars(tasAdjust="stage")  
     return(pheno_date)

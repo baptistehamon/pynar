@@ -56,7 +56,7 @@ def udevult_comput(x,TDMIN,TDMAX,TCXSTOP):
     
     X=x
     X=np.where(X>0,X,0)
-    condition1 = (X > TDMIN) & (X < TDMIN)
+    condition1 = (X > TDMIN) & (X < TDMAX)
     condition2 = (X >= TDMAX) & (X < TCXSTOP)
     condition3 = (X >= TCXSTOP)
     udevc=X
@@ -80,12 +80,12 @@ def compute_indice_BBCH(TmoyYear,GDD_BBCH,rfvi,rfpi,TDMIN,TDMAX,TCXSTOP):
     stade = stade.where((UPVTCumul > GDD_BBCH).any(dim="time"))
     return stade
 
-def selection_stage(Tmoy,start_stage,end_stage,latitude,longitude):
+def selection_stage(UPVT,start_stage,end_stage,latitude,longitude):
     data_compute = xr.apply_ufunc(
         lambda x, start, end: np.where(
-        (np.arange(len(x)) < start) | (np.arange(len(x)) > end), 0, x
+        (np.arange(len(x)) <= start) | (np.arange(len(x)) >= end), 0, x
         ),
-        Tmoy,  # Xarray contenant les données de température
+        UPVT,  # Xarray contenant les données de température
         start_stage.stage,  # Xarray contenant les indices de début (start)
         end_stage.stage,    # Xarray contenant les indices de fin (end)
         input_core_dims=[["time"], [], []],  # "time" est la dimension de rast_year
@@ -98,7 +98,7 @@ def selection_stage(Tmoy,start_stage,end_stage,latitude,longitude):
     data_compute = data_compute.where(~np.isnan(start_stage.stage))  
     return(data_compute)
 
-def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,vernalisation,photoperiode,params,varName):
+def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,vernalisation,photoperiode,params,varName,sowing_date=None):
     TCXSTOP, TDMIN, TDMAX, SENSIPHOT, PHOBASE, PHOSTAT, TFROID, AMPFROID, JVCMINI, jvc = params
     time = tmean.time
 
@@ -117,6 +117,7 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
                 result = xr.full_like(tmean[varName].isel(time=0), np.nan)
                 result = result.drop_vars("time")  # Supprimer la dimension temps
                 result = result.assign_coords(year=year)
+                result=result.to_dataset(name="tasAdjust")
                 results.append(result)
                 continue
                 
@@ -143,15 +144,17 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
             rfpi = xr.apply_ufunc(
                 RFPI_cal,
                 photoP,
-                SENSIPHOT, PHOBASE, PHOSTAT,
+                SENSIPHOT, PHOSTAT,PHOBASE
             )
         else :
             rfpi =xr.full_like(rast_year,1)
             rfpi = rfpi[varName]
         if vernalisation:
+            sowing_date_year=sowing_date.sel(year=year)
             jvi_calc = JVI(rast_year[varName], TFROID, AMPFROID)
             JVCMINI_da = xr.full_like(jvi_calc, JVCMINI)  
             jvc_da = xr.full_like(jvi_calc, jvc)
+            jvi_calc=selection_stage(jvi_calc,start_stage=sowing_date_year,end_stage=end_stage,latitude=latitude,longitude=longitude)
             rfvi = xr.apply_ufunc(
                 RFVI_cal,
                 JVCMINI_da,  
@@ -164,18 +167,29 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
         else : 
             rfvi =xr.full_like(rast_year,1)
             rfvi = rfvi[varName]
+        
+        udevecult = xr.apply_ufunc(
+                    udevult_comput,
+                    rast_year,
+                    TDMIN,TDMAX,TCXSTOP 
+            )
+        UPVT=udevecult*rfpi*rfvi
+        
     # Appliquer la sélection et le calcul d'indice
-        data_compute = selection_stage(rast_year, start_stage, end_stage,latitude=latitude,longitude=longitude)
-       
-        result = compute_indice_BBCH(data_compute, GDD_BBCH=GDD,rfpi=rfpi, rfvi=rfvi,TDMIN=TDMIN,TDMAX=TDMAX,TCXSTOP=TCXSTOP)
+        data_compute = selection_stage(UPVT, start_stage, end_stage,latitude=latitude,longitude=longitude)
+        UPVTCumul=data_compute.cumsum(dim="time")    
+
+        result = (UPVTCumul > GDD).argmax(dim="time")
+        
+        #result = compute_indice_BBCH(data_compute, GDD_BBCH=GDD,rfpi=rfpi, rfvi=rfvi,TDMIN=TDMIN,TDMAX=TDMAX,TCXSTOP=TCXSTOP)
         result =  result.assign_coords(year=year)
     # Ajouter le résultat
         results.append(result)
     #return(results)
 # Concaténation des résultats par année
     #if isinstance(results, xr.DataArray):
-    pheno_date = xr.concat(results, dim="year").to_dataset(name="stage")
+    pheno_date = xr.concat(results, dim="year")
     #if isinstance(results,xr.Dataset):
     #    pheno_date = xr.concat(results, dim="year")
-    #    pheno_date = pheno_date.rename_vars(tasAdjust="stage")  
+    pheno_date = pheno_date.rename_vars(tasAdjust="stage")  
     return(pheno_date)

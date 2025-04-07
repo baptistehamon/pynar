@@ -91,8 +91,8 @@ def selection_stage(UPVT,start_stage,end_stage,latitude,longitude):
         input_core_dims=[["time"], [], []],  # "time" est la dimension de rast_year
         output_core_dims=[["time"]],  # Le résultat doit conserver la dimension "time"
         vectorize=True,  # Appliquer la fonction à chaque cellule (y, x)
-        dask="parallelized",  # Utiliser Dask si nécessaire pour des données volumineuses
-        output_dtypes=[np.float32]  # Le type de la sortie (par exemple, float32)
+        #dask="parallelized",  # Utiliser Dask si nécessaire pour des données volumineuses
+        #output_dtypes=[np.float32]  # Le type de la sortie (par exemple, float32)
     )
     data_compute = data_compute.transpose("time",latitude,longitude)
     data_compute = data_compute.where(~np.isnan(start_stage.stage))  
@@ -139,7 +139,7 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
                 vectorize=True
             )
             photoP = photoP.transpose("time", latitude)
-            photoP = photoP.expand_dims(x=rast_year[longitude].values, axis=-1)
+            photoP = photoP.expand_dims(longitude=rast_year[longitude].values, axis=-1)
         
             rfpi = xr.apply_ufunc(
                 RFPI_cal,

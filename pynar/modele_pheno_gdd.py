@@ -73,7 +73,7 @@ def RFVI_cal(JVCMINI, jvc, JVI):
 
 
 def compute_indice_BBCH(TmoyYear,GDD_BBCH,rfvi,rfpi,TDMIN,TDMAX,TCXSTOP):
-    udevecult = udevult_comput(TmoyYear["tasAdjust"],TDMIN,TDMAX,TCXSTOP)
+    udevecult = udevult_comput(TmoyYear[varName],TDMIN,TDMAX,TCXSTOP)
     UPVT_cell = udevecult * rfvi * rfpi
     UPVTCumul = UPVT_cell.cumsum(dim="time")
     stade = (UPVTCumul > GDD_BBCH).argmax(dim="time")
@@ -117,7 +117,7 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
                 result = xr.full_like(tmean[varName].isel(time=0), np.nan)
                 result = result.drop_vars("time")  # Supprimer la dimension temps
                 result = result.assign_coords(year=year)
-                result=result.to_dataset(name="tasAdjust")
+                result=result.to_dataset(name=varName)
                 results.append(result)
                 continue
                 
@@ -191,5 +191,5 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
     pheno_date = xr.concat(results, dim="year")
     #if isinstance(results,xr.Dataset):
     #    pheno_date = xr.concat(results, dim="year")
-    pheno_date = pheno_date.rename_vars(tasAdjust="stage")  
+    pheno_date = pheno_date.rename_vars({varName: "stage"})  
     return(pheno_date)

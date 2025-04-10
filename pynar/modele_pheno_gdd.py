@@ -48,10 +48,13 @@ def photoperiode_calc(zlat, jday,bis=False):
 
 
 
-def RFPI_cal (x,SENSIPHOT,PHOSTAT,PHOBASE):
-    rfpi =(1 - SENSIPHOT) * (x - PHOSTAT) / (PHOSTAT - PHOBASE) + 1
-    rfpi = np.where(rfpi>1,1,rfpi)
-    rfpi = np.where(rfpi<SENSIPHOT,SENSIPHOT,rfpi)
+def RFPI_cal(x, SENSIPHOT, PHOSTAT, PHOBASE):
+    # Calcul principal de RFPI
+    rfpi = (1 - SENSIPHOT) * (x - PHOSTAT) / (PHOSTAT - PHOBASE) + 1
+    
+    # Limiter les valeurs entre SENSIPHOT et 1
+    rfpi = rfpi.clip(min=SENSIPHOT, max=1)
+    
     return rfpi
 
 
@@ -70,10 +73,13 @@ def udevult_comput(x,TDMIN,TDMAX,TCXSTOP):
 
     return(udevc)
 def RFVI_cal(JVCMINI, jvc, JVI):
-    rfvi = (np.cumsum(JVI, axis=0) - JVCMINI) / (jvc - JVCMINI)  # Cumul sur l'axe time
-    rfvi = np.clip(rfvi, 0, 1)  # Équivalent à np.where()
+    # Utilisation directe de l'addition cumulée de xarray
+    rfvi = (JVI.cumsum(dim="time") - JVCMINI) / (jvc - JVCMINI)
+    
+    # Limiter les valeurs entre 0 et 1
+    rfvi = rfvi.clip(min=0, max=1)
+    
     return rfvi
-
 
 def compute_indice_BBCH(TmoyYear,GDD_BBCH,rfvi,rfpi,TDMIN,TDMAX,TCXSTOP):
     udevecult = udevult_comput(TmoyYear[varName],TDMIN,TDMAX,TCXSTOP)
@@ -172,6 +178,7 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
             else:
                 photoP=photoP
             rast_year = tmean.sel(time=tmean.time.dt.year == year)
+        
 
     # Sélection des périodes de stade de croissance
         start_stage = stade.sel(year=year)
@@ -179,15 +186,7 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
     
         jours_annee = rast_year["time"].dt.dayofyear 
     #"""Fonction appliquée sur chaque cellule"""
-        if photoperiode:
-        
-        
-            rfpi = xr.apply_ufunc(
-                RFPI_cal,
-                photoP,
-                SENSIPHOT, PHOSTAT,PHOBASE
-            )
-        else :
+        if not photoperiode:
             rfpi =xr.full_like(rast_year,1)
             rfpi = rfpi[varName]
         if vernalisation:

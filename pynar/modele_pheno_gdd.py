@@ -73,12 +73,8 @@ def udevult_comput(x,TDMIN,TDMAX,TCXSTOP):
 
     return(udevc)
 def RFVI_cal(JVCMINI, jvc, JVI):
-    # Utilisation directe de l'addition cumulée de xarray
-    rfvi = (JVI.cumsum(dim="time") - JVCMINI) / (jvc - JVCMINI)
-    
-    # Limiter les valeurs entre 0 et 1
-    rfvi = rfvi.clip(min=0, max=1)
-    
+    rfvi = (np.cumsum(JVI, axis=0) - JVCMINI) / (jvc - JVCMINI)  # Cumul sur l'axe time
+    rfvi = np.clip(rfvi, 0, 1)  # Équivalent à np.where()
     return rfvi
 
 def compute_indice_BBCH(TmoyYear,GDD_BBCH,rfvi,rfpi,TDMIN,TDMAX,TCXSTOP):
@@ -126,6 +122,13 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
             )
             photoP_NONBIS = photoP_NONBIS.transpose("time", latitude)
             photoP_NONBIS = photoP_NONBIS.expand_dims({longitude: rast_ex[longitude].values}, axis=-1)
+            rfpi_NONBIS=xr.apply_ufunc(
+                RFPI_cal,
+                photoP_NONBIS,
+                SENSIPHOT, PHOSTAT,PHOBASE
+                
+            )
+
             BIS=True
             jours_anneeBis = xr.DataArray(np.arange(1, 367), dims=['time'])
             photoP_Bis = xr.apply_ufunc(
@@ -139,6 +142,12 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
             )
             photoP_Bis = photoP_Bis.transpose("time", latitude)
             photoP_Bis = photoP_Bis.expand_dims({longitude: rast_ex[longitude].values}, axis=-1)
+            rfpi_BIS=xr.apply_ufunc(
+                RFPI_cal,
+                photoP_Bis,
+                SENSIPHOT, PHOSTAT,PHOBASE
+                
+            )
 
 
     years = pd.DatetimeIndex(time.values).year.unique()
@@ -160,33 +169,35 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
                 result=result.to_dataset(name=varName)
                 results.append(result)
                 continue
-            if photoperiode:
+            if photoperiode :
                 is_leapR = pd.to_datetime(f'{year}-01-01').is_leap_year
                 is_leapP=  pd.to_datetime(f'{year-1}-01-01').is_leap_year
                 if is_leapR:
-                    photoP=xr.concat([photoP_NONBIS,photoP_Bis],dim="time")
+                    rfpi=xr.concat([rfpi_NONBIS,rfpi_BIS],dim="time")
                 elif is_leapP:
-                    photoP=xr.concat([photoP_Bis,photoP_NONBIS],dim="time")
+                    rfpi=xr.concat([rfpi_BIS,rfpi_NONBIS],dim="time")
                 else:
-                    photoP=xr.concat([photoP_NONBIS,photoP_NONBIS],dim="time")
+                    rfpi=xr.concat([rfpi_NONBIS,rfpi_NONBIS],dim="time")
                 
         else:
         # Sélectionner uniquement l'année actuelle
             is_leap=pd.to_datetime(f'{year}-01-01').is_leap_year
             if is_leap:
-                photoP_Bis
+                rfpi=rfpi_NONBIS
             else:
-                photoP=photoP
+                rfpi=rfpi_NONBIS
             rast_year = tmean.sel(time=tmean.time.dt.year == year)
-        
-
+           
+    
     # Sélection des périodes de stade de croissance
         start_stage = stade.sel(year=year)
         end_stage = xr.full_like(start_stage, 730)
     
         jours_annee = rast_year["time"].dt.dayofyear 
     #"""Fonction appliquée sur chaque cellule"""
-        if not photoperiode:
+
+
+        if not photoperiode :
             rfpi =xr.full_like(rast_year,1)
             rfpi = rfpi[varName]
         if vernalisation:
@@ -204,7 +215,9 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
                 output_core_dims=[["time", latitude, longitude]],
                 vectorize=True
             )
-           
+            #rfvi=(jvi_calc.cumsum(dim="time"))/(jvc-JVCMINI)
+            #rfvi=np.clip(rfvi,0,1)
+        
         else : 
             rfvi =xr.full_like(rast_year,1)
             rfvi = rfvi[varName]

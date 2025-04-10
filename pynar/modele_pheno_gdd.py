@@ -154,6 +154,7 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
             jvi_calc = JVI(rast_year[varName], TFROID, AMPFROID)
             JVCMINI_da = xr.full_like(jvi_calc, JVCMINI)  
             jvc_da = xr.full_like(jvi_calc, jvc)
+            jvi_calc=selection_stage(jvi_calc,start_stage=sowing_date_year,end_stage=end_stage,latitude="lat",longitude="lon")
             rfvi = xr.apply_ufunc(
                 RFVI_cal,
                 JVCMINI_da,  
@@ -163,11 +164,12 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
                 output_core_dims=[["time", latitude, longitude]],
                 vectorize=True
             )
+           
         else : 
             rfvi =xr.full_like(rast_year,1)
             rfvi = rfvi[varName]
         
-        rfvi=selection_stage(rfvi,start_stage=sowing_date_year,end_stage=end_stage,latitude="lat",longitude="lon")
+        
         udevecult = xr.apply_ufunc(
                     udevult_comput,
                     rast_year,

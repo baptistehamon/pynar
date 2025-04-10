@@ -15,16 +15,19 @@ def JVI (x,TFROID,AMPFROID):
     jvi = jvi.where(jvi > 0, 0)
     return jvi
 
-def photoperiode_calc(zlat, jday):
-    maxjd = 365
-    alat = zlat/57.296
+def photoperiode_calc(zlat, jday,bis=False):
+    if bis :
+        maxjd=366
+    else:
+        maxjd = 365
+    alat = np.radians(zlat)
     zday = jday
     
     # Correction des jours > 365
-    zday = np.where(zday > maxjd, zday - 365, zday)
+    zday = np.where(zday > maxjd, zday - maxjd, zday)
     
-    theta1 = 2*np.pi*(zday-80)/365
-    theta2 = 0.034*(np.sin((2*np.pi*zday)/365)-np.sin(2*np.pi*80/365))
+    theta1 = 2*np.pi*(zday-80)/maxjd
+    theta2 = 0.034*(np.sin((2*np.pi*zday)/maxjd)-np.sin(2*np.pi*80/maxjd))
     theta = theta1 + theta2
     dec = np.arcsin(0.3978 * np.sin(theta))
     x1 = np.cos(alat) * np.cos(dec)
@@ -101,11 +104,42 @@ def selection_stage(UPVT,start_stage,end_stage,latitude,longitude):
 def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,vernalisation,photoperiode,params,varName,sowing_date=None):
     TCXSTOP, TDMIN, TDMAX, SENSIPHOT, PHOBASE, PHOSTAT, TFROID, AMPFROID, JVCMINI, jvc = params
     time = tmean.time
+    years = pd.DatetimeIndex(time.values).year.unique()
+    rast_ex = tmean.sel(time=tmean.time.dt.year == years[0] )
+    if photoperiode:
+            NONBIS=False
+            jours_annee = xr.DataArray(np.arange(1, 366), dims=['time'])
+            photoP_NONBIS = xr.apply_ufunc(
+                photoperiode_calc,
+                rast_ex[latitude],                # Raster de latitude (2D: y, x)
+                jours_annee,
+                NONBIS, 
+                #input_core_dims=[["lat"], ["time"]],  # Latitudes sur la première dimension et jours sur la deuxième
+                #output_core_dims=[["time", latitude]],   # On applique aux temps de la cellule
+                vectorize=True
+            )
+            photoP_NONBIS = photoP_NONBIS.transpose("time", latitude)
+            photoP_NONBIS = photoP_NONBIS.expand_dims({longitude: rast_ex[longitude].values}, axis=-1)
+            BIS=True
+            jours_anneeBis = xr.DataArray(np.arange(1, 367), dims=['time'])
+            photoP_Bis = xr.apply_ufunc(
+                photoperiode_calc,
+                rast_ex[latitude],                # Raster de latitude (2D: y, x)
+                jours_anneeBis,
+                BIS,
+                #input_core_dims=[[latitude], ["time"]],  # Latitudes sur la première dimension et jours sur la deuxième
+                #output_core_dims=[["time", latitude]],    # On applique aux temps de la cellule
+                vectorize=True
+            )
+            photoP_Bis = photoP_Bis.transpose("time", latitude)
+            photoP_Bis = photoP_Bis.expand_dims({longitude: rast_ex[longitude].values}, axis=-1)
+
 
     years = pd.DatetimeIndex(time.values).year.unique()
     results = []
     for year in years:
         print(year)
+        
     # Vérifier si on prend une ou deux années
         if two_years_culture:
         # Sélectionner l'année actuelle et l'année précédente
@@ -120,9 +154,23 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
                 result=result.to_dataset(name=varName)
                 results.append(result)
                 continue
+            if photoperiode:
+                is_leapR = pd.to_datetime(f'{year}-01-01').is_leap_year
+                is_leapP=  pd.to_datetime(f'{year-1}-01-01').is_leap_year
+                if is_leapR:
+                    photoP=xr.concat([photoP_NONBIS,photoP_Bis],dim="time")
+                elif is_leapP:
+                    photoP=xr.concat([photoP_Bis,photoP_NONBIS],dim="time")
+                else:
+                    photoP=xr.concat([photoP_NONBIS,photoP_NONBIS],dim="time")
                 
         else:
         # Sélectionner uniquement l'année actuelle
+            is_leap=pd.to_datetime(f'{year}-01-01').is_leap_year
+            if is_leap:
+                photoP_Bis
+            else:
+                photoP=photoP
             rast_year = tmean.sel(time=tmean.time.dt.year == year)
 
     # Sélection des périodes de stade de croissance
@@ -132,14 +180,7 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
         jours_annee = rast_year["time"].dt.dayofyear 
     #"""Fonction appliquée sur chaque cellule"""
         if photoperiode:
-            photoP = xr.apply_ufunc(
-                photoperiode_calc,
-                rast_year[latitude],                # Raster de latitude (2D: y, x)
-                jours_annee,   # On applique aux temps de la cellule
-                vectorize=True
-            )
-            photoP = photoP.transpose("time", latitude)
-            photoP = photoP.expand_dims({longitude: rast_year[longitude].values}, axis=-1)
+        
         
             rfpi = xr.apply_ufunc(
                 RFPI_cal,
@@ -154,7 +195,7 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
             jvi_calc = JVI(rast_year[varName], TFROID, AMPFROID)
             JVCMINI_da = xr.full_like(jvi_calc, JVCMINI)  
             jvc_da = xr.full_like(jvi_calc, jvc)
-            jvi_calc=selection_stage(jvi_calc,start_stage=sowing_date_year,end_stage=end_stage,latitude="lat",longitude="lon")
+            jvi_calc=selection_stage(jvi_calc,start_stage=sowing_date_year,end_stage=end_stage,latitude=latitude,longitude=longitude)
             rfvi = xr.apply_ufunc(
                 RFVI_cal,
                 JVCMINI_da,  

@@ -182,10 +182,11 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
         else:
         # Sélectionner uniquement l'année actuelle
             is_leap=pd.to_datetime(f'{year}-01-01').is_leap_year
-            if is_leap:
-                rfpi=rfpi_NONBIS
-            else:
-                rfpi=rfpi_NONBIS
+            if photoperiode:
+                if is_leap:
+                    rfpi=rfpi_BIS
+                else:
+                    rfpi=rfpi_NONBIS
             rast_year = tmean.sel(time=tmean.time.dt.year == year)
            
     

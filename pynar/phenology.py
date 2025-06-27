@@ -1,8 +1,13 @@
 """Phenology module"""
-from typing import Literal, Union, Optional
+from typing import Literal, Union, Optional, Any
 
 import numpy as np
 import xarray as xr
+
+from xclim.core.calendar import get_calendar
+from xclim.core.units import convert_units_to
+from xclim.indices.generic import compare
+import xclim.indices.run_length as rl
 
 from pynar.helpers import day_lengths, select_doy
 
@@ -12,7 +17,9 @@ __all__ = [
     "vernalisation_index",
     "reduction_factor_vernalisation_index",
     "crop_effective_temperature",
-    "crop_development_unit"
+    "crop_development_unit",
+    "stage_doy",
+    "phenological_stage"
 ]
 
 def photoperiod(
@@ -203,3 +210,145 @@ def crop_development_unit( # upvt
     
     cdu = crop_temp * rfpi * rfvi
     return cdu.rename("crop_development_unit").assign_attrs(units='degC d')
+
+def stage_doy(
+    cdu: xr.DataArray,
+    thresh: Union[int, float],
+    from_doy: Optional[Union[int, xr.DataArray]] = None,
+    freq: str = 'YS',
+) -> xr.DataArray:
+    """
+    Calculate the doy of the phenological stage based on the crop development unit (CDU).
+
+    Parameters
+    ----------
+    cdu : xr.DataArray
+        Crop development unit.
+    thresh : int or float
+        Threshold value of the crop development unit to determine the phenological stage.
+    from_doy : int or xr.DataArray, optional
+        Starting day of year for CDU accumulation.
+    freq : str, optional
+        Resampling frequency for the phenological stage calculation (default YS).
+    Returns
+    -------
+    xr.DataArray
+        Day of year of the phenological stage.
+    """
+    if from_doy is not None:
+        cdu = select_doy(cdu, freq=freq, start=from_doy)
+    
+    cumcdu = cdu.resample(time=freq).cumsum(dim='time').assign_coords(time=cdu.time)
+
+    out = rl.resample_and_rl(
+        compare(cumcdu, ">=", thresh),
+        resample_before_rl=True,
+        compute=rl.first_run,
+        window=1,
+        coord="dayofyear",
+        freq=freq,
+        dim="time"
+    )
+    out.attrs.update(
+        long_name=f"Phenological stage date for {thresh} CDU",
+        description=f"Day of year when the cumulative crop development unit reaches {thresh} degC d.",
+        unit= "",
+        is_dayofyear=np.int32(1),
+        calendar= get_calendar(cumcdu)
+    )
+    return out
+
+
+def phenological_stage(
+        tas,
+        thresh: int | float,
+        params: dict[str, Any],
+        is_photoperiod: bool | None = False,
+        is_vernalisation: bool | None = False,
+        start_cycle_doy: int | None = 275,
+        from_doy: Optional[Union[int, xr.DataArray]] = None,
+        freq: str = 'YS-OCT'
+
+) -> xr.DataArray:
+    """
+    Calculate the phenological stage date (doy) based on the cumulative crop development unit (CDU).
+
+    Parameters
+    ----------
+    tas : xr.DataArray
+        Daily mean temperature.
+    thresh : int or float
+        Threshold value of the crop development unit to determine the phenological stage.
+    params : dict[str, Any]
+        Dictionary containing the parameters for the phenological model. Required keys:
+        - 'tmin_thresh': Threshold temperature below which temperature has no effect on crop development (degC).
+        - 'tmax_thresh': Threshold temperature with maximum effect on crop development (degC).
+        - 'tstop_thresh': Threshold temperature above which temperature has no effect on crop development (degC).
+        Optional keys if `is_photoperiod` is True:
+        - 'sensiphot': Amplitude of the photoperiod sensitivity (0 to 1).
+        - 'phobase': Value of the base photoperiod (hours).
+        - 'phosat': Value of the saturation photoperiod (hours).
+        Optional keys if `is_vernalisation` is True:
+        - 'optimum_temp': Optimum vernalisation temperature (degC).
+        - 'thermal_sensi': Thermal sensitivity to vernalisation (degC).
+        - 'vern_mindays': Minimum number of vernalising days before starting vernalisation process.
+        - 'vern_ndays': Number of vernalising days required to reach vernalisation requirements.\n
+    is_photoperiod : bool, optional
+        If True, include the photoperiod effect in the phenological model (default is False).
+    is_vernalisation : bool, optional
+        If True, include the vernalisation effect in the phenological model (default is False).
+    start_cycle_doy : int, optional
+        Day of year corresponding to the start of the growing cycle of the crop. Usually corresponds to the sowing date
+        for annual crops and the greenup date for perennial crops (default is 275, corresponding to October 1st in Northern Hemisphere).
+    from_doy : int or xr.DataArray, optional
+        Starting day of year for the crop development unit (CDU) accumulation (corresponds to the previous phenological stage date). If None,
+        the `start_cycle_doy` is used.
+    freq : str, optional
+        Resampling frequency for the phenological stage calculation. Should correspond to the month of the start of the growing season or
+        'start_doy' if `is_vernalisation` is True.
+        Default is 'YS-OCT' corresponding to Northern Hemisphere (set to 'YS-APR' for Southern Hemisphere).
+    """
+    def _check_required_params(
+            params: dict,
+            is_photoperiod: bool = False,
+            is_vernalisation: bool = False,
+    ):
+
+        required_params = ['tmin_thresh', 'tmax_thresh', 'tstop_thresh']
+        if is_photoperiod:
+            required_params += ['sensiphot', 'phobase', 'phosat']
+        if is_vernalisation:
+            required_params += ['optimum_temp', 'thermal_sensi', 'vern_mindays', 'vern_ndays']
+
+        if not all(param in params for param in required_params):
+            missing_params = [param for param in required_params if param not in params]
+            raise ValueError(f"Required parameters are missing: {', '.join(missing_params)}")
+    
+    # Check if required parameters are provided
+    _check_required_params(params, is_photoperiod, is_vernalisation)
+
+    tas = convert_units_to(tas, 'degC')  # Ensure temperature is in Celsius
+
+    if is_photoperiod:
+        phoi = photoperiod(tas['time'], lat=tas['lat'], altitude_angle=-6)
+        rfpi = reduction_factor_photoperiod_index(phoi, **{k: params[k] for k in ['sensiphot', 'phobase', 'phosat']})
+    else:
+        rfpi = None
+    
+    if is_vernalisation:
+        vi = vernalisation_index(tas, **{k: params[k] for k in ['optimum_temp', 'thermal_sensi']})
+        rfvi = reduction_factor_vernalisation_index(vi, start_doy=start_cycle_doy, freq=freq, **{k: params[k] for k in ['vern_mindays', 'vern_ndays']})
+    else:
+        rfvi = None
+    
+    cet = crop_effective_temperature(tas, **{k: params[k] for k in ['tmin_thresh', 'tmax_thresh', 'tstop_thresh']})
+    cdu = crop_development_unit(crop_temp=cet, rfpi=rfpi, rfvi=rfvi)
+
+    if from_doy is None:
+        from_doy = start_cycle_doy
+
+    out = stage_doy(cdu, thresh=thresh, freq=freq, from_doy=from_doy)
+    out.attrs.update(
+        method= f"vernalisation={is_vernalisation}, photoperiod={is_photoperiod}"
+    )
+    return out

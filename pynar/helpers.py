@@ -10,7 +10,8 @@ from xclim.core.calendar import select_time, time_bnds, get_calendar, _is_leap_y
 
 __all__ = [
     "day_lengths",
-    "select_doy"
+    "select_doy",
+    "mask_uncomplete_years"
 ]
 
 def day_lengths( # Modified from xclim.indices.generic.day_lengths
@@ -102,3 +103,33 @@ def select_doy(
             end = end_doys
     # return start, end
     return select_time(da, doy_bounds=(start, end), include_bounds=include_bounds)
+
+def mask_uncomplete_years(
+    da: xr.DataArray,
+    freq: Optional[str] = "YS",
+    drop: Optional[bool] = True
+) -> xr.DataArray:
+    bounds = time_bnds(da.time, freq, "1day").resample(time=freq).min()
+    
+    data_start = da.time.min().values
+    data_end = da.time.max().values
+    freq_start = bounds.isel(bnds=0, time=0).values
+    freq_end = bounds.isel(bnds=1, time=-1).values
+
+    if data_start == freq_start and data_end == freq_end:
+        return da
+    
+    if data_start != freq_start:
+        start = bounds.isel(bnds=0, time=1).values
+    else :
+        start = freq_start
+
+    if data_end != freq_end:
+        end = bounds.isel(bnds=1, time=-2).values
+    else :
+        end = freq_end
+
+    return da.where(
+        (da.time >= start) & (da.time <= end),
+        drop=drop
+    )

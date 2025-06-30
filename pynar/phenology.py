@@ -9,7 +9,7 @@ from xclim.core.units import convert_units_to
 from xclim.indices.generic import compare
 import xclim.indices.run_length as rl
 
-from pynar.helpers import day_lengths, select_doy
+from pynar.helpers import day_lengths, select_doy, mask_uncomplete_years
 
 __all__ = [
     "photoperiod",
@@ -235,6 +235,8 @@ def stage_doy(
     xr.DataArray
         Day of year of the phenological stage.
     """
+    cdu = mask_uncomplete_years(cdu, freq=freq)
+
     if from_doy is not None:
         cdu = select_doy(cdu, freq=freq, start=from_doy)
     

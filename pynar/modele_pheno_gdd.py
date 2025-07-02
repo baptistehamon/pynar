@@ -87,8 +87,8 @@ def compute_indice_BBCH(TmoyYear,GDD_BBCH,rfvi,rfpi,TDMIN,TDMAX,TCXSTOP):
 
 def selection_stage(UPVT,start_stage,end_stage,latitude,longitude):
     # convertir doy en index
-    start -= 1
-    end -= 1
+    start_stage -= 1
+    end_stage -= 1
 
     data_compute = xr.apply_ufunc(
         lambda x, start, end: np.where(

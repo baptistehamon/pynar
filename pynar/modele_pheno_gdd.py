@@ -239,11 +239,12 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
         data_compute = selection_stage(UPVT, start_stage, end_stage,latitude=latitude,longitude=longitude)
         UPVTCumul=data_compute.cumsum(dim="time")    
 
-        result = (UPVTCumul >= GDD).argmax(dim="time")
+        cond = UPVTCumul >= GDD
+        result = cond.argmax(dim="time").assing_coords(year=year)
+        result = result.where(cond.any(dim="time"))
         result += 1 # convertir index en doy
         
         #result = compute_indice_BBCH(data_compute, GDD_BBCH=GDD,rfpi=rfpi, rfvi=rfvi,TDMIN=TDMIN,TDMAX=TDMAX,TCXSTOP=TCXSTOP)
-        result =  result.assign_coords(year=year)
     # Ajouter le résultat
         results.append(result)
     #return(results)

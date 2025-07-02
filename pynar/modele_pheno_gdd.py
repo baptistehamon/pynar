@@ -92,7 +92,7 @@ def selection_stage(UPVT,start_stage,end_stage,latitude,longitude):
 
     data_compute = xr.apply_ufunc(
         lambda x, start, end: np.where(
-        (np.arange(len(x)) <= start) | (np.arange(len(x)) >= end), 0, x
+        (np.arange(len(x)) < start) | (np.arange(len(x)) > end), 0, x
         ),
         UPVT,  # Xarray contenant les données de température
         start_stage.stage,  # Xarray contenant les indices de début (start)

@@ -240,7 +240,7 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
         UPVTCumul=data_compute.cumsum(dim="time")    
 
         cond = UPVTCumul >= GDD
-        result = cond.argmax(dim="time").assing_coords(year=year)
+        result = cond.argmax(dim="time").assign_coords(year=year)
         result = result.where(cond.any(dim="time"))
         result += 1 # convertir index en doy
         

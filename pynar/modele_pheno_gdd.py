@@ -86,9 +86,13 @@ def compute_indice_BBCH(TmoyYear,GDD_BBCH,rfvi,rfpi,TDMIN,TDMAX,TCXSTOP):
     return stade
 
 def selection_stage(UPVT,start_stage,end_stage,latitude,longitude):
+    # convertir doy en index
+    start_stage -= 1
+    end_stage -= 1
+
     data_compute = xr.apply_ufunc(
         lambda x, start, end: np.where(
-        (np.arange(len(x)) <= start) | (np.arange(len(x)) >= end), 0, x
+        (np.arange(len(x)) < start) | (np.arange(len(x)) > end), 0, x
         ),
         UPVT,  # Xarray contenant les données de température
         start_stage.stage,  # Xarray contenant les indices de début (start)
@@ -235,10 +239,12 @@ def proccess_all_year (tmean,stade, two_years_culture,GDD,latitude,longitude,ver
         data_compute = selection_stage(UPVT, start_stage, end_stage,latitude=latitude,longitude=longitude)
         UPVTCumul=data_compute.cumsum(dim="time")    
 
-        result = (UPVTCumul > GDD).argmax(dim="time")
+        cond = UPVTCumul >= GDD
+        result = cond.argmax(dim="time").assign_coords(year=year)
+        result = result.where(cond.any(dim="time"))
+        result += 1 # convertir index en doy
         
         #result = compute_indice_BBCH(data_compute, GDD_BBCH=GDD,rfpi=rfpi, rfvi=rfvi,TDMIN=TDMIN,TDMAX=TDMAX,TCXSTOP=TCXSTOP)
-        result =  result.assign_coords(year=year)
     # Ajouter le résultat
         results.append(result)
     #return(results)

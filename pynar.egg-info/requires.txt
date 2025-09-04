@@ -1,0 +1,4 @@
+pandas
+xarray
+numpy
+xclim>=0.57.1

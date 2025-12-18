@@ -111,10 +111,10 @@ def mask_uncomplete_years(
 ) -> xr.DataArray:
     bounds = time_bnds(da.time, freq, "1day").resample(time=freq).min()
     
-    data_start = np.datetime64(da.time.min().values, 'D')
-    data_end = np.datetime64(da.time.max().values, 'D')
-    freq_start = np.datetime64(bounds.isel(bnds=0, time=0).values, 'D')
-    freq_end = np.datetime64(bounds.isel(bnds=1, time=-1).values, 'D')
+    data_start = da.time.min().values
+    data_end = da.time.max().values
+    freq_start = bounds.isel(bnds=0, time=0).values
+    freq_end = bounds.isel(bnds=1, time=-1).values
 
     if data_start == freq_start and data_end == freq_end:
         return da

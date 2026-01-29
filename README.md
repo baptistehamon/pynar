@@ -7,9 +7,8 @@ Ce package permet de calculer des indicateurs climatiques à partir de données 
 Pour installer le package, vous pouvez cloner le dépôt et utiliser `pip` :
 
 ```sh
-pip3 install  git+https://git@forgemia.inra.fr/agroclim/Indicators/OutilsPourIndicateurs/fonctionspython/pynar.git
+pip3 install  git+https://forge.inrae.fr/agroclim/Indicators/OutilsPourIndicateurs/fonctionspython/pynar.git"
 ```
-
 
 ## Fonctionnalités
 
@@ -20,7 +19,7 @@ pip3 install  git+https://git@forgemia.inra.fr/agroclim/Indicators/OutilsPourInd
 ## Description
 
     Cette fonction calcule un indicateur climatique spécifique à partir de données NetCDF.
-
+ss
     Parameters:
     - `climate_data` (xr.Dataset): Le jeu de données NetCDF contenant les données climatiques.
     - `NameIndicator` (str): Le nom de l'indicateur climatique à calculer.

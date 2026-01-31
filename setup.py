@@ -9,7 +9,7 @@ setup(
         'pandas',  # Bibliothèque pour la manipulation de données
         'xarray',  # Bibliothèque pour le traitement de données multidimensionnelles
         'numpy',   # Bibliothèque pour le calcul numérique
-        'xclim >=0.57.1',
+        'xclim >=0.60.0',  # Bibliothèque pour les indicateurs climatiques
     ],
     description='Un package pour calculer des indicateurs climatiques',  # Brève description du package
     author='Renan LE ROUX',  # Nom de l'auteur

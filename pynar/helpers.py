@@ -253,7 +253,7 @@ def mask_uncomplete_years(
     freq: Optional[str] = "YS",
     drop: Optional[bool] = True
 ) -> xr.DataArray:
-    bounds = time_bnds(da.time, freq, "1day").resample(time=freq).min()
+    bounds = time_bnds(da.time, freq).resample(time=freq).min()
     
     data_start = da.time.min().values
     data_end = da.time.max().values

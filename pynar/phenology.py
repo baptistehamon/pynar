@@ -42,7 +42,7 @@ def photoperiod(
         The altitude angle (in degrees) for which the photoperiod is computed.
         Default is -6 degrees, meaning the light is perceptible from and up to 6 degrees below the horizon (see STICS).
     method : {'spencer', 'simple'}
-        Which approximation to use when computing the solar declination angle.
+        Which approximation to use when computing the solar declination angle. Default is 'spencer'.
         See :py:func:`solar_declination`.
 
     Returns
@@ -111,7 +111,7 @@ def reduction_factor_vernalisation_index( # rfvi
         vern_index: xr.DataArray, # jvi
         vern_mindays: Union[int, float], # jvcmini
         vern_ndays: Union[int, float], # jvc
-        start_doy: Optional[Union[int, xr.DataArray]] = None,
+        cycle_start: Optional[xr.DataArray | str] = None,
         freq = 'YS'
 ) -> xr.DataArray:
     """
@@ -125,10 +125,14 @@ def reduction_factor_vernalisation_index( # rfvi
         Minimum number of vernalising days before starting vernalisation process.
     vern_ndays : int or float
         Number of vernalising days required to reach vernalisation requirements.
-    start_doy : int, optional
-        Start day of year for vernalisation accumulation.
+    cycle_start: xr.DataArray or str, optional
+        Date or day-of-year corresponding to the start of vernalisation accumulation (i.e., start of the growing
+        cycle). Usually corresponds to the sowing date for annual crops and the greenup date for perennial crops.
+        If a string is provided, it hould be in 'MM-DD' format (e.g., '10-01' for October 1st). If None,
+        vernalisation accumulation starts from the beginning of the year defined by `freq`.
     freq : str, optional
-        Resampling frequency for the vernalisation index (default is 'YS' - yearly start).
+        Resampling frequency for the vernalisation index. Must be a yearly frequency corresponding to the start
+        of the month of the growing season. Default is 'YS'.
     
     Returns
     -------
@@ -136,8 +140,8 @@ def reduction_factor_vernalisation_index( # rfvi
         Reduction factor for vernalisation index ranging from 0 to 1.
     """
     # mask data before the start of vernalisation accumulation
-    if start_doy is not None:
-        vern_index = select_doys(vern_index, doy_bounds=(start_doy, None))
+    if cycle_start is not None:
+        vern_index = select_doys(vern_index, doy_bounds=(cycle_start, None), include_nans=False, freq=freq)
     
     rfvi = (vern_index.resample(time=freq).cumsum(dim='time') - vern_mindays) / (vern_ndays - vern_mindays)
     return rfvi.clip(min=0, max=1).rename('vernalisation_reduction_factor')
@@ -204,9 +208,9 @@ def crop_development_unit( # upvt
         Crop development unit.
     """
     if rfpi is None:
-        rfpi = xr.ones_like(crop_temp, dtype=int)
+        rfpi = 1
     if rfvi is None:
-        rfvi = xr.ones_like(crop_temp, dtype=int)
+        rfvi = 1
     
     cdu = crop_temp * rfpi * rfvi
     return cdu.rename("crop_development_unit").assign_attrs(units='degC d')
@@ -214,7 +218,7 @@ def crop_development_unit( # upvt
 def stage_doy(
     cdu: xr.DataArray,
     thresh: Union[int, float],
-    from_doy: Optional[Union[int, xr.DataArray]] = None,
+    start_from: Optional[Union[xr.DataArray, str]] = None,
     freq: str = 'YS',
 ) -> xr.DataArray:
     """
@@ -226,10 +230,13 @@ def stage_doy(
         Crop development unit.
     thresh : int or float
         Threshold value of the crop development unit to determine the phenological stage.
-    from_doy : int or xr.DataArray, optional
-        Starting day of year for CDU accumulation.
+    start_from : xr.DataArray or str, optional
+        Date or day-of-year corresponding to the start of CDU accumulation. Either corresponds to the start of the growing
+        cycle or to the previous phenological stage day-of-year. If a string is provided, it should be in the format 'MM-DD'
+        (e.g., '10-01' for October 1st). If None, accumulation starts from the beginning of the year defined by `freq`.
     freq : str, optional
-        Resampling frequency for the phenological stage calculation (default YS).
+        Resampling frequency for the phenological stage calculation. Must be a yearly frequency corresponding to the start
+        of the month of the growing season. Default is 'YS'.
     Returns
     -------
     xr.DataArray
@@ -237,8 +244,8 @@ def stage_doy(
     """
     cdu = mask_uncomplete_years(cdu, freq=freq)
 
-    if from_doy is not None:
-        cdu = select_doys(cdu, doy_bounds=(from_doy, None))
+    if start_from is not None:
+        cdu = select_doys(cdu, doy_bounds=(start_from, None), include_nans=False, freq=freq)
     
     cumcdu = cdu.resample(time=freq).cumsum(dim='time').assign_coords(time=cdu.time)
 
@@ -267,8 +274,8 @@ def phenological_stage(
         params: dict[str, Any],
         is_photoperiod: bool | None = False,
         is_vernalisation: bool | None = False,
-        start_cycle_doy: int | None = 275,
-        from_doy: Optional[Union[int, xr.DataArray]] = None,
+        cycle_start: str = '10-01',
+        start_from: Optional[Union[xr.DataArray, str]] = None,
         freq: str = 'YS-OCT'
 
 ) -> xr.DataArray:
@@ -299,16 +306,15 @@ def phenological_stage(
         If True, include the photoperiod effect in the phenological model (default is False).
     is_vernalisation : bool, optional
         If True, include the vernalisation effect in the phenological model (default is False).
-    start_cycle_doy : int, optional
-        Day of year corresponding to the start of the growing cycle of the crop. Usually corresponds to the sowing date
-        for annual crops and the greenup date for perennial crops (default is 275, corresponding to October 1st in Northern Hemisphere).
-    from_doy : int or xr.DataArray, optional
-        Starting day of year for the crop development unit (CDU) accumulation (corresponds to the previous phenological stage date). If None,
-        the `start_cycle_doy` is used.
+    cycle_start : xr.DataArray or str, optional
+        Date or day-of-year corresponding to the start of the growing cycle. Usually corresponds to the sowing date for annual crops
+        and the greenup date for perennial crops. If a string is provided, it should be in 'MM-DD' format (e.g., '10-01' for October 1st).
+    start_from : xr.DataArray or str, optional
+        Date or day-of-year corresponding to the start of crop development unit (CDU) accumulation (i.e., previous phenological stage date).
+        If a string is provided, it should be in the format 'MM-DD' (e.g., '10-01' for October 1st). If None, the `cycle_start` value is used.
     freq : str, optional
-        Resampling frequency for the phenological stage calculation. Should correspond to the month of the start of the growing season or
-        'start_doy' if `is_vernalisation` is True.
-        Default is 'YS-OCT' corresponding to Northern Hemisphere (set to 'YS-APR' for Southern Hemisphere).
+        Resampling frequency for the phenological stage calculation. Should correspond to the month of the start of the growing season.
+        Default is 'YS-OCT' (October 1st).
     """
     def _check_required_params(
             params: dict,
@@ -339,17 +345,17 @@ def phenological_stage(
     
     if is_vernalisation:
         vi = vernalisation_index(tas, **{k: params[k] for k in ['optimum_temp', 'thermal_sensi']})
-        rfvi = reduction_factor_vernalisation_index(vi, start_doy=start_cycle_doy, freq=freq, **{k: params[k] for k in ['vern_mindays', 'vern_ndays']})
+        rfvi = reduction_factor_vernalisation_index(vi, start_from=cycle_start, freq=freq, **{k: params[k] for k in ['vern_mindays', 'vern_ndays']})
     else:
         rfvi = None
     
     cet = crop_effective_temperature(tas, **{k: params[k] for k in ['tmin_thresh', 'tmax_thresh', 'tstop_thresh']})
     cdu = crop_development_unit(crop_temp=cet, rfpi=rfpi, rfvi=rfvi)
 
-    if from_doy is None:
-        from_doy = start_cycle_doy
+    if start_from is None:
+        start_from = cycle_start
 
-    out = stage_doy(cdu, thresh=thresh, freq=freq, from_doy=from_doy)
+    out = stage_doy(cdu, thresh=thresh, freq=freq, start_from=start_from)
     out.attrs.update(
         method= f"vernalisation={is_vernalisation}, photoperiod={is_photoperiod}"
     )

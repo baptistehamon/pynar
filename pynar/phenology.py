@@ -345,7 +345,7 @@ def phenological_stage(
     
     if is_vernalisation:
         vi = vernalisation_index(tas, **{k: params[k] for k in ['optimum_temp', 'thermal_sensi']})
-        rfvi = reduction_factor_vernalisation_index(vi, start_from=cycle_start, freq=freq, **{k: params[k] for k in ['vern_mindays', 'vern_ndays']})
+        rfvi = reduction_factor_vernalisation_index(vi, cycle_start=cycle_start, freq=freq, **{k: params[k] for k in ['vern_mindays', 'vern_ndays']})
     else:
         rfvi = None
     

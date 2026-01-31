@@ -65,7 +65,7 @@ def select_doy(
     """
     Improve the doys selection method of xclim 'select_time'.
     """
-    def mask_outside_doys(
+    def mask_between_doys(
         da: xr.DataArray,
         doy_bounds: tuple[int | xr.DataArray | None, int | xr.DataArray | None],
         include_bounds: tuple[bool, bool] = (True, True),
@@ -187,7 +187,7 @@ def select_doy(
 
     if isinstance(include_bounds, bool):
         include_bounds = (include_bounds, include_bounds)
-    mask = mask_outside_doys(da, doy_bounds, include_bounds, include_nans=False)
+    mask = mask_between_doys(da, doy_bounds, include_bounds, include_nans=False)
     return da.where(mask)
 
 def mask_uncomplete_years(

@@ -57,7 +57,7 @@ def day_lengths( # Modified from xclim.indices.generic.day_lengths
         day_length_hours = ((24 / np.pi) * np.arccos((np.sin(np.radians(altitude_angle)) - np.sin(lat) * np.sin(declination)) / (np.cos(lat) * np.cos(declination))))
     return day_length_hours.assign_attrs(units="h")
 
-def select_doy(
+def select_doys(
         da: xr.DataArray,
         doy_bounds: tuple[int | xr.DataArray | None, int | xr.DataArray | None],
         include_bounds: Optional[list[bool]] = True

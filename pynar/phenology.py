@@ -9,7 +9,7 @@ from xclim.core.units import convert_units_to
 from xclim.indices.generic import compare
 import xclim.indices.run_length as rl
 
-from pynar.helpers import day_lengths, select_doy, mask_uncomplete_years
+from pynar.helpers import day_lengths, select_doys, mask_uncomplete_years
 
 __all__ = [
     "photoperiod",
@@ -137,7 +137,7 @@ def reduction_factor_vernalisation_index( # rfvi
     """
     # mask data before the start of vernalisation accumulation
     if start_doy is not None:
-        vern_index = select_doy(vern_index, doy_bounds=(start_doy, None))
+        vern_index = select_doys(vern_index, doy_bounds=(start_doy, None))
     
     rfvi = (vern_index.resample(time=freq).cumsum(dim='time') - vern_mindays) / (vern_ndays - vern_mindays)
     return rfvi.clip(min=0, max=1).rename('vernalisation_reduction_factor')
@@ -238,7 +238,7 @@ def stage_doy(
     cdu = mask_uncomplete_years(cdu, freq=freq)
 
     if from_doy is not None:
-        cdu = select_doy(cdu, doy_bounds=(from_doy, None))
+        cdu = select_doys(cdu, doy_bounds=(from_doy, None))
     
     cumcdu = cdu.resample(time=freq).cumsum(dim='time').assign_coords(time=cdu.time)
 

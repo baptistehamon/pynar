@@ -3,6 +3,7 @@ from typing import Union, Literal, Optional
 import numpy as np
 import pandas as pd
 import xarray as xr
+from datetime import timedelta
 
 from xclim.core.units import convert_units_to
 from xclim.indices.helpers import solar_declination
@@ -258,7 +259,7 @@ def mask_uncomplete_years(
     data_start = da.time.min().values
     data_end = da.time.max().values
     freq_start = bounds.isel(bnds=0, time=0).values
-    freq_end = bounds.isel(bnds=1, time=-1).values
+    freq_end = bounds.isel(bnds=1, time=-1).values - timedelta(days=1)
 
     if data_start == freq_start and data_end == freq_end:
         return da
@@ -269,7 +270,7 @@ def mask_uncomplete_years(
         start = freq_start
 
     if data_end != freq_end:
-        end = bounds.isel(bnds=1, time=-2).values
+        end = bounds.isel(bnds=1, time=-2).values - timedelta(days=1)
     else :
         end = freq_end
 

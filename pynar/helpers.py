@@ -1,5 +1,6 @@
 from typing import Union, Literal, Optional
 
+import cftime
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -259,7 +260,12 @@ def mask_uncomplete_years(
     data_start = da.time.min().values
     data_end = da.time.max().values
     freq_start = bounds.isel(bnds=0, time=0).values
-    freq_end = bounds.isel(bnds=1, time=-1).values - timedelta(days=1)
+    if isinstance(bounds.time.values[0], cftime.datetime):
+        daydelta = timedelta(days=1)
+    else:
+        daydelta = np.timedelta64(1, "D")
+
+    freq_end = bounds.isel(bnds=1, time=-1).values - daydelta
 
     if data_start == freq_start and data_end == freq_end:
         return da
@@ -270,7 +276,7 @@ def mask_uncomplete_years(
         start = freq_start
 
     if data_end != freq_end:
-        end = bounds.isel(bnds=1, time=-2).values - timedelta(days=1)
+        end = bounds.isel(bnds=1, time=-2).values - daydelta
     else :
         end = freq_end
 
